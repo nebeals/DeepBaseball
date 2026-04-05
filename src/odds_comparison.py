@@ -24,6 +24,9 @@ warnings.filterwarnings("ignore")
 ROOT = Path(__file__).parent.parent
 REPORTS_DIR = ROOT / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
+ODDS_DIR = REPORTS_DIR / "odds"
+ODDS_DIR.mkdir(exist_ok=True)
+PREDICTIONS_DIR = REPORTS_DIR / "predictions"
 CACHE_DIR = ROOT / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
@@ -165,7 +168,7 @@ def compare(predictions: pd.DataFrame, odds: pd.DataFrame, min_edge: float) -> p
 # ── output ────────────────────────────────────────────────────────────────────
 
 def save_comparison(result: pd.DataFrame, date_str: str, min_edge: float, remove_vig: bool):
-    txt_path, csv_path = REPORTS_DIR / f"odds_{date_str}.txt", REPORTS_DIR / f"odds_{date_str}.csv"
+    txt_path, csv_path = ODDS_DIR / f"odds_{date_str}.txt", ODDS_DIR / f"odds_{date_str}.csv"
 
     # Add Started column based on commence_time vs current time
     now = datetime.now(timezone.utc)
@@ -179,7 +182,7 @@ def save_comparison(result: pd.DataFrame, date_str: str, min_edge: float, remove
     result["Started"] = result["commence_time"].apply(has_started)
 
     # CSV Column order
-    cols = ["home_team", "away_team", "MOD %", "MKT %", "MOD ML", "MKT ML", "EDGE", "SIDE", "STAKE %", "BOOK", "Started"]
+    cols = ["home_team", "away_team", "home_ml", "away_ml", "MOD %", "MKT %", "MOD ML", "MKT ML", "EDGE", "SIDE", "STAKE %", "BOOK", "Started"]
     result[cols].to_csv(csv_path, index=False)
 
     vig_s = "vig removed" if remove_vig else "vig included"
@@ -221,7 +224,7 @@ def main(args):
     api_key = args.api_key or os.environ.get("ODDS_API_KEY")
     if not api_key: return print("Error: No ODDS_API_KEY found.")
 
-    pred_csv = REPORTS_DIR / f"predictions_{date_str}.csv"
+    pred_csv = PREDICTIONS_DIR / f"predictions_{date_str}.csv"
     if not pred_csv.exists(): return print(f"Error: {pred_csv} not found.")
 
     predictions = pd.read_csv(pred_csv)

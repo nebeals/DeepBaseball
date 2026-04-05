@@ -27,6 +27,7 @@ Scheduling (run once per day before first pitch, e.g. 9 AM):
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 import warnings
@@ -68,6 +69,9 @@ for d in (RAW_DIR, FEAT_DIR, REPORTS_DIR):
 
 DEFAULT_CKPT   = ROOT / "checkpoints" / "best_resnet.pt"
 COMBINED_LOGS  = RAW_DIR / "game_logs_all.csv"
+UPDATE_TRACKER = RAW_DIR / ".last_update.json"
+PREDICTIONS_DIR = REPORTS_DIR / "predictions"
+PREDICTIONS_DIR.mkdir(exist_ok=True)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -83,6 +87,25 @@ def _step(title: str) -> None:
     print(f"{'─'*60}")
 
 
+def _load_last_update() -> date | None:
+    """Load the date of the last successful game log update."""
+    if UPDATE_TRACKER.exists():
+        try:
+            data = json.loads(UPDATE_TRACKER.read_text())
+            return datetime.strptime(data["last_update"], "%Y-%m-%d").date()
+        except:
+            pass
+    return None
+
+
+def _save_last_update(update_date: date):
+    """Save the date of the last successful game log update."""
+    UPDATE_TRACKER.write_text(json.dumps({
+        "last_update": update_date.strftime("%Y-%m-%d"),
+        "timestamp": datetime.now().isoformat()
+    }, indent=2))
+
+
 # ── Step 1: refresh game logs ─────────────────────────────────────────────────
 
 def refresh_game_logs(today: date, dry_run: bool = False) -> pd.DataFrame:
@@ -95,6 +118,7 @@ def refresh_game_logs(today: date, dry_run: bool = False) -> pd.DataFrame:
     _step("Step 1/4 — Refreshing game logs")
 
     current_year = today.year
+    last_update = _load_last_update()
 
     if dry_run:
         _log("Dry run: skipping data pull, loading cached CSVs.")
@@ -105,30 +129,65 @@ def refresh_game_logs(today: date, dry_run: bool = False) -> pd.DataFrame:
             )
         return pd.read_csv(COMBINED_LOGS, parse_dates=["game_date"])
 
-    # Load existing historical data (prior seasons)
+    # Load existing data
+    existing_current_season: pd.DataFrame | None = None
     historical: list[pd.DataFrame] = []
+    
     if COMBINED_LOGS.exists():
         existing = pd.read_csv(COMBINED_LOGS, parse_dates=["game_date"])
-        # Keep everything except the current season — we'll re-pull that fresh
+        # Keep historical data (prior seasons)
         historical_only = existing[existing["season"] < current_year]
         if len(historical_only):
             historical.append(historical_only)
             _log(f"Loaded {len(historical_only):,} historical games "
                  f"({historical_only['season'].min()}–{current_year - 1})")
+        
+        # Keep existing current season data
+        existing_current = existing[existing["season"] == current_year]
+        if len(existing_current):
+            existing_current_season = existing_current
+            last_game_date = existing_current["game_date"].max().strftime("%Y-%m-%d")
+            _log(f"Loaded {len(existing_current):,} existing {current_year} games (through {last_game_date})")
 
-    # Pull current season from Baseball Reference
-    _log(f"Pulling {current_year} season game logs for all 30 teams...")
+    # Check if already up-to-date
+    if last_update and existing_current_season is not None:
+        if last_update >= today:
+            _log(f"Data is current (last update: {last_update}). Skipping fetch.")
+            all_frames = historical + [existing_current_season]
+            combined = pd.concat(all_frames, ignore_index=True)
+            combined = combined.drop_duplicates(
+                subset=["game_date", "home_team", "away_team"]
+            ).sort_values("game_date").reset_index(drop=True)
+            return combined
+
+    # Determine date range to fetch
+    if last_update and existing_current_season is not None:
+        # Only fetch from the day after last update
+        fetch_from = last_update + timedelta(days=1)
+        _log(f"Fetching games from {fetch_from} to {today}...")
+    else:
+        # No existing data or no tracker - full season fetch
+        fetch_from = date(current_year, 3, 1)  # Opening Day-ish
+        _log(f"No existing data found. Fetching full {current_year} season...")
+    # Disable pybaseball cache to ensure fresh data
+    import pybaseball as pyb
+    pyb.cache.disable()
+
     current_frames: list[pd.DataFrame] = []
     failed_teams: list[str] = []
 
     for i, team in enumerate(MLB_TEAMS, 1):
         try:
             df = fetch_game_logs(current_year)
-            # fetch_game_logs returns all teams' games in one call internally;
-            # since it loops teams inside, we only need to call it once.
-            # Break after first successful pull — the function handles all teams.
+            # Filter to games from fetch_from onwards
+            df["game_date"] = pd.to_datetime(df["game_date"])
+            df = df[df["game_date"] >= pd.Timestamp(fetch_from)]
+            # Only completed games
+            if "home_win" in df.columns:
+                df = df[df["home_win"].notna()]
             if len(df):
                 current_frames.append(df)
+                _log(f"Retrieved {len(df):,} new games from {fetch_from} onwards.")
             break
         except Exception as e:
             _log(f"  Warning [{team}]: {e}")
@@ -151,14 +210,28 @@ def refresh_game_logs(today: date, dry_run: bool = False) -> pd.DataFrame:
                 _log(f"  Warning [{team}]: {e}")
 
     if current_frames:
-        current_games = pd.concat(current_frames, ignore_index=True)
-        # Filter to completed games only (rows with a score)
-        if "home_win" in current_games.columns:
-            current_games = current_games[current_games["home_win"].notna()]
-        _log(f"Retrieved {len(current_games):,} {current_year} games.")
+        new_games = pd.concat(current_frames, ignore_index=True)
+        _log(f"Retrieved {len(new_games):,} new games.")
     else:
-        _log("Could not retrieve current season data. Using cached data only.")
+        _log("No new games found.")
+        new_games = pd.DataFrame()
+
+    # Combine new games with existing current season data
+    all_current_frames: list[pd.DataFrame] = []
+    if existing_current_season is not None:
+        all_current_frames.append(existing_current_season)
+    if len(new_games):
+        all_current_frames.append(new_games)
+    
+    if all_current_frames:
+        current_games = pd.concat(all_current_frames, ignore_index=True)
+        current_games = current_games.drop_duplicates(
+            subset=["game_date", "home_team", "away_team"]
+        )
+        _log(f"Combined current season: {len(current_games):,} unique games.")
+    else:
         current_games = pd.DataFrame()
+        _log("Could not retrieve current season data. Using cached data only.")
 
     # Combine and deduplicate
     all_frames = historical + ([current_games] if len(current_games) else [])
@@ -171,6 +244,7 @@ def refresh_game_logs(today: date, dry_run: bool = False) -> pd.DataFrame:
     ).sort_values("game_date").reset_index(drop=True)
 
     combined.to_csv(COMBINED_LOGS, index=False)
+    _save_last_update(today)
     _log(f"Combined log: {len(combined):,} games → {COMBINED_LOGS}")
 
     return combined
@@ -402,8 +476,8 @@ def save_reports(predictions: list[dict], today: date) -> tuple[Path, Path]:
     Returns (txt_path, csv_path).
     """
     date_str = today.strftime("%Y-%m-%d")
-    txt_path = REPORTS_DIR / f"predictions_{date_str}.txt"
-    csv_path = REPORTS_DIR / f"predictions_{date_str}.csv"
+    txt_path = PREDICTIONS_DIR / f"predictions_{date_str}.txt"
+    csv_path = PREDICTIONS_DIR / f"predictions_{date_str}.csv"
 
     # ── CSV ───────────────────────────────────────────────────────────────────
     df = pd.DataFrame(predictions)

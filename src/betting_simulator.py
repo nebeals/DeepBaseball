@@ -28,9 +28,11 @@ import pandas as pd
 # ── paths ─────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent.parent
 REPORTS_DIR = ROOT / "reports"
+ODDS_DIR = REPORTS_DIR / "odds"
+SIMULATION_DIR = REPORTS_DIR / "simulation"
 DATA_DIR = ROOT / "data" / "raw"
 
-for d in (REPORTS_DIR, DATA_DIR):
+for d in (REPORTS_DIR, ODDS_DIR, SIMULATION_DIR, DATA_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 
@@ -110,7 +112,7 @@ def load_odds_comparison(target_date: date) -> pd.DataFrame | None:
     Load odds comparison report for a specific date.
     Returns DataFrame with betting recommendations.
     """
-    odds_csv = REPORTS_DIR / f"odds_{target_date.strftime('%Y-%m-%d')}.csv"
+    odds_csv = ODDS_DIR / f"odds_{target_date.strftime('%Y-%m-%d')}.csv"
     
     if not odds_csv.exists():
         return None
@@ -182,22 +184,18 @@ class Bet:
         }
 
 
-def parse_value_bet(value_bet_str: str) -> tuple[str, str] | None:
+def parse_value_bet(side_str: str) -> tuple[str, str] | None:
     """
-    Parse the value_bet string from odds comparison.
-    Input: "MIL (home)" or "SDP (away)" or "—"
+    Parse the SIDE string from odds comparison.
+    Input: "MIL" or "SDP" (team abbreviation)
     Returns: (team_abbr, side) or None if no value bet
     """
-    if value_bet_str == "—" or not value_bet_str:
+    if not side_str or side_str == "—":
         return None
     
-    # Parse "TEAM (side)" format
-    try:
-        team = value_bet_str.split(" ")[0]
-        side = value_bet_str.split("(")[1].replace(")", "").strip()
-        return (team, side)
-    except (IndexError, AttributeError):
-        return None
+    # SIDE column contains just the team abbreviation
+    team = side_str.strip()
+    return (team, "unknown")
 
 
 def simulate_day_bets(
@@ -218,20 +216,24 @@ def simulate_day_bets(
     bets: list[Bet] = []
     
     for _, row in odds_df.iterrows():
-        # Check if there's a value bet
-        value_bet = parse_value_bet(row.get("value_bet", "—"))
-        if value_bet is None:
+        # Check if there's a value bet (SIDE column)
+        side = row.get("SIDE", "")
+        if not side:
             continue
         
-        bet_team, bet_side = value_bet
+        bet_team = side
         home_team = row["home_team"]
         away_team = row["away_team"]
         
-        # Get the appropriate moneyline based on bet side
-        if bet_side == "home":
-            moneyline = row.get("home_ml_best", row.get("home_ml_avg", 0))
+        # Determine if betting on home or away
+        if bet_team == home_team:
+            bet_side = "home"
+            moneyline = row.get("home_ml", 0)
+        elif bet_team == away_team:
+            bet_side = "away"
+            moneyline = row.get("away_ml", 0)
         else:
-            moneyline = row.get("away_ml_best", row.get("away_ml_avg", 0))
+            continue
         
         # Skip if no valid moneyline
         if moneyline == 0 or pd.isna(moneyline):
@@ -259,17 +261,26 @@ def resolve_bets(bets: list[Bet], game_results: pd.DataFrame) -> list[Bet]:
     resolved: list[Bet] = []
     
     for bet in bets:
-        # Find the matching game
+        # Find the matching game (check both home/away orientations)
         match = game_results[
-            (game_results["home_team"] == bet.home_team) &
-            (game_results["away_team"] == bet.away_team)
+            ((game_results["home_team"] == bet.home_team) &
+             (game_results["away_team"] == bet.away_team)) |
+            ((game_results["home_team"] == bet.away_team) &
+             (game_results["away_team"] == bet.home_team))
         ]
         
         if match.empty:
             _log(f"  Warning: No result found for {bet.away_team} @ {bet.home_team}")
             continue
         
-        home_win = bool(match.iloc[0]["home_win"])
+        # Determine if the bet's home team matches the game result's home team
+        result_row = match.iloc[0]
+        if result_row["home_team"] == bet.home_team:
+            home_win = bool(result_row["home_win"])
+        else:
+            # Teams are swapped, so invert the result
+            home_win = not bool(result_row["home_win"])
+        
         bet.resolve(home_win)
         resolved.append(bet)
     
@@ -342,12 +353,12 @@ def save_simulation_results(
     
     # Individual bets CSV
     bets_df = pd.DataFrame([bet.to_dict() for bet in all_bets])
-    bets_path = REPORTS_DIR / f"simulation_bets_{date_range}.csv"
+    bets_path = SIMULATION_DIR / f"simulation_bets_{date_range}.csv"
     bets_df.to_csv(bets_path, index=False)
     
     # Daily bankroll history CSV
     history_df = pd.DataFrame(tracker.history)
-    history_path = REPORTS_DIR / f"simulation_bankroll_{date_range}.csv"
+    history_path = SIMULATION_DIR / f"simulation_bankroll_{date_range}.csv"
     history_df.to_csv(history_path, index=False)
     
     # Summary text report
@@ -404,7 +415,7 @@ def save_simulation_results(
         "=" * 70,
     ]
     
-    report_path = REPORTS_DIR / f"simulation_report_{date_range}.txt"
+    report_path = SIMULATION_DIR / f"simulation_report_{date_range}.txt"
     report_path.write_text("\n".join(lines))
     
     return report_path
@@ -446,7 +457,10 @@ def run_simulation(
                 win_count = sum(1 for b in resolved if b.won)
                 _log(f"  Results: {win_count}/{len(resolved)} wins, P&L: ${day_pnl:+.2f}")
             else:
-                _log(f"  Warning: No game results found for {current}")
+                # Still track bets even without results (pending status)
+                day_pnl = tracker.record_day(current, day_bets)
+                all_bets.extend(day_bets)
+                _log(f"  Warning: No game results found for {current} ({len(day_bets)} bets pending)")
         
         current += timedelta(days=1)
     

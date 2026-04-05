@@ -144,8 +144,8 @@ python src/odds_comparison.py
 2. `odds_comparison.py` fetches live moneylines, finds edges, recommends value bets
 
 **Output files**:
-- `reports/predictions_YYYY-MM-DD.txt/.csv` — Model win probabilities
-- `reports/odds_YYYY-MM-DD.txt/.csv` — Odds comparison with edges
+- `reports/predictions/predictions_YYYY-MM-DD.txt/.csv` — Model win probabilities
+- `reports/odds/odds_YYYY-MM-DD.txt/.csv` — Odds comparison with edges
 
 ### Understanding the Odds Report
 
@@ -254,16 +254,16 @@ python src/betting_simulator.py \
 ```
 
 **How it works**:
-1. Reads `reports/odds_YYYY-MM-DD.csv` for VALUE BET recommendations
+1. Reads `reports/odds/odds_YYYY-MM-DD.csv` for VALUE BET recommendations
 2. Places flat unit bets on each value bet
 3. Fetches actual game results from `data/raw/game_logs_all.csv`
 4. Calculates win/loss based on moneyline payouts
 5. Tracks bankroll, ROI, win rate over time
 
 **Output files**:
-- `reports/simulation_report_YYYYMMDD-YYYYMMDD.txt` — Summary with ROI
-- `reports/simulation_bets_YYYYMMDD-YYYYMMDD.csv` — Individual bet details
-- `reports/simulation_bankroll_YYYYMMDD-YYYYMMDD.csv` — Daily bankroll tracking
+- `reports/simulation/simulation_report_YYYYMMDD-YYYYMMDD.txt` — Summary with ROI
+- `reports/simulation/simulation_bets_YYYYMMDD-YYYYMMDD.csv` — Individual bet details
+- `reports/simulation/simulation_bankroll_YYYYMMDD-YYYYMMDD.csv` — Daily bankroll tracking
 
 ---
 
@@ -358,9 +358,9 @@ Features used (20 total):
 - `data/features/features_w15.csv` — Feature matrix (rolling window)
 
 ### Report Files
-- `reports/predictions_YYYY-MM-DD.txt/.csv` — Daily model predictions
-- `reports/odds_YYYY-MM-DD.txt/.csv` — Odds comparison with edges
-- `reports/simulation_*_YYYYMMDD-YYYYMMDD.*` — Betting simulation results
+- `reports/predictions/predictions_YYYY-MM-DD.txt/.csv` — Daily model predictions
+- `reports/odds/odds_YYYY-MM-DD.txt/.csv` — Odds comparison with edges
+- `reports/simulation/simulation_*_YYYYMMDD-YYYYMMDD.*` — Betting simulation results
 
 ### Model Files
 - `checkpoints/best_resnet.pt` — Best ResNet checkpoint
