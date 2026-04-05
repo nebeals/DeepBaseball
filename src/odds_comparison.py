@@ -11,7 +11,7 @@ import json
 import os
 import sys
 import warnings
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -119,7 +119,7 @@ def parse_odds(raw_games: list[dict], remove_vig_flag: bool = True) -> pd.DataFr
                     american_to_prob(h_ml), american_to_prob(a_ml))
                 rows.append(
                     {"home_team": h_abbr, "away_team": a_abbr, "home_ml": h_ml, "away_ml": a_ml, "home_mkt_p": hp,
-                     "away_mkt_p": ap, "book": bk["key"]})
+                     "away_mkt_p": ap, "book": bk["key"], "commence_time": g.get("commence_time", "")})
     return pd.DataFrame(rows)
 
 
@@ -167,8 +167,19 @@ def compare(predictions: pd.DataFrame, odds: pd.DataFrame, min_edge: float) -> p
 def save_comparison(result: pd.DataFrame, date_str: str, min_edge: float, remove_vig: bool):
     txt_path, csv_path = REPORTS_DIR / f"odds_{date_str}.txt", REPORTS_DIR / f"odds_{date_str}.csv"
 
+    # Add Started column based on commence_time vs current time
+    now = datetime.now(timezone.utc)
+    def has_started(ct):
+        if not ct: return False
+        try:
+            commence = datetime.fromisoformat(ct.replace('Z', '+00:00'))
+            return now >= commence
+        except:
+            return False
+    result["Started"] = result["commence_time"].apply(has_started)
+
     # CSV Column order
-    cols = ["home_team", "away_team", "MOD %", "MKT %", "MOD ML", "MKT ML", "EDGE", "SIDE", "STAKE %", "BOOK"]
+    cols = ["home_team", "away_team", "MOD %", "MKT %", "MOD ML", "MKT ML", "EDGE", "SIDE", "STAKE %", "BOOK", "Started"]
     result[cols].to_csv(csv_path, index=False)
 
     vig_s = "vig removed" if remove_vig else "vig included"
@@ -191,15 +202,16 @@ def save_comparison(result: pd.DataFrame, date_str: str, min_edge: float, remove
     ]
 
     for _, r in result.iterrows():
-        matchup = f"{r['away_team']:>4} @ {r['home_team']:<4}"
+        started_marker = "  ***" if r.get('Started', False) else ""
+        matchup = f"{r['away_team']:>4} @ {r['home_team']:<4}{started_marker}"
         row_str = (
-            f"  {matchup:<18}  {r['MOD %']:<13}  {r['MKT %']:<13}  "
+            f"  {matchup:<22}  {r['MOD %']:<13}  {r['MKT %']:<13}  "
             f"{r['MOD ML']:>8}  {r['MKT ML']:>8}  {r['EDGE']:>6.1f}%  "
             f"{r['SIDE']:<5}  {r['STAKE %']:>7.1f}%   {r['BOOK'][:12]:<12}"
         )
         lines.append(row_str)
 
-    lines += ["", "  NOTE: MOD ML and MKT ML refer to the HOME team price for direct comparison.", "═" * 115]
+    lines += ["", "  NOTE: MOD ML and MKT ML refer to the HOME team price. *** = game in progress.", "═" * 115]
     txt_path.write_text("\n".join(lines))
     return txt_path, csv_path
 

@@ -1,5 +1,7 @@
 # DeepBaseball Git Ignore
 
+.windsurf
+
 # Data directories
 data/
 data/raw/
