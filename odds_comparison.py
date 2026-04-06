@@ -21,7 +21,7 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent
 REPORTS_DIR = ROOT / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
 ODDS_DIR = REPORTS_DIR / "odds"

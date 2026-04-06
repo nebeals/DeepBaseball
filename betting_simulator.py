@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent
 REPORTS_DIR = ROOT / "reports"
 ODDS_DIR = REPORTS_DIR / "odds"
 SIMULATION_DIR = REPORTS_DIR / "simulation"

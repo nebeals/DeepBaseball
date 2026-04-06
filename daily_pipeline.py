@@ -41,24 +41,24 @@ import torch
 warnings.filterwarnings("ignore")
 
 # ── path setup ────────────────────────────────────────────────────────────────
-_SRC = Path(__file__).parent
+_SRC = Path(__file__).parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from data_collection import MLB_TEAMS, fetch_game_logs
-from features import (
+from src.data_collection import MLB_TEAMS, fetch_game_logs
+from src.features import (
     FEATURE_COLUMNS as FEATURE_COLS, META_COLUMNS as META_COLS,
     _build_team_timeseries, _rolling_team_stats,
     _merge_team_stats_onto_games, _add_context_features,
     _add_differential_features,
 )
-from predict_game import run_inference, _confidence, _apply_scaler
-from train import (
+from src.predict_game import run_inference, _confidence, _apply_scaler
+from src.train import (
     load_checkpoint, PlattWrapper, IsotonicWrapper
 )
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-ROOT        = Path(__file__).parent.parent
+ROOT        = Path(__file__).parent
 RAW_DIR     = ROOT / "data" / "raw"
 FEAT_DIR    = ROOT / "data" / "features"
 REPORTS_DIR = ROOT / "reports"

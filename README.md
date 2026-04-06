@@ -133,10 +133,10 @@ Run these two commands each morning to get fresh predictions and odds comparison
 
 ```bash
 # Step 1: Update game logs, rebuild features, predict today's games
-python src/daily_pipeline.py
+python daily_pipeline.py
 
 # Step 2: Compare predictions to live betting odds
-python src/odds_comparison.py
+python odds_comparison.py
 ```
 
 **What happens**:
@@ -174,7 +174,7 @@ Schedule daily runs with crontab (macOS/Linux):
 crontab -e
 
 # Add this line to run at 9:00 AM daily
-0 9 * * * cd /path/to/DeepBaseball && python src/daily_pipeline.py && python src/odds_comparison.py
+0 9 * * * cd /path/to/DeepBaseball && python daily_pipeline.py && python odds_comparison.py
 ```
 
 Windows: Use Task Scheduler to run the commands at your preferred time.
@@ -199,7 +199,7 @@ python src/data_collection.py --start_year 2015 --end_year 2023 --skip_covid
 
 ```bash
 # Rebuild feature matrix with custom rolling window
-python src/daily_pipeline.py --window 20 --dry_run
+python daily_pipeline.py --window 20 --dry_run
 ```
 
 ### Step 3: Training
@@ -209,7 +209,7 @@ python src/daily_pipeline.py --window 20 --dry_run
 python src/train.py --arch resnet --window 15 --epochs 100
 
 # Use specific checkpoint for inference
-python src/daily_pipeline.py --checkpoint checkpoints/best_mlp.pt
+python daily_pipeline.py --checkpoint checkpoints/best_mlp.pt
 ```
 
 ### Step 4: Single Game Prediction
@@ -223,16 +223,16 @@ python src/predict_game.py --date 2024-07-04 --home NYY --away BOS
 
 ```bash
 # Only show strong edges (≥8%)
-python src/odds_comparison.py --min_edge 0.08
+python odds_comparison.py --min_edge 0.08
 
 # Compare specific historical date
-python src/odds_comparison.py --date 2024-07-04
+python odds_comparison.py --date 2024-07-04
 
 # Include vig in market probabilities (default: vig removed)
-python src/odds_comparison.py --remove_vig false
+python odds_comparison.py --remove_vig false
 
 # Force refresh (ignore cache)
-python src/odds_comparison.py --force_refresh
+python odds_comparison.py --force_refresh
 ```
 
 ---
@@ -243,10 +243,10 @@ After games complete, simulate how the VALUE BET recommendations performed:
 
 ```bash
 # Simulate single day
-python src/betting_simulator.py --date 2024-07-04
+python betting_simulator.py --date 2024-07-04
 
 # Simulate date range with custom bankroll
-python src/betting_simulator.py \
+python betting_simulator.py \
     --start_date 2024-07-01 \
     --end_date 2024-07-31 \
     --bankroll 5000 \
@@ -300,13 +300,13 @@ python src/train.py
 export ODDS_API_KEY="your_key_here"
 
 # Or pass on command line
-python src/odds_comparison.py --api_key YOUR_KEY
+python odds_comparison.py --api_key YOUR_KEY
 ```
 
 ### "No predictions file found" error
 ```bash
 # Run daily pipeline first
-python src/daily_pipeline.py
+python daily_pipeline.py
 ```
 
 ### "No game results found" (simulator)
@@ -380,7 +380,7 @@ Features used (20 total):
 python -c "from src.train import load_checkpoint; print('Imports OK')"
 
 # Test data pipeline
-python src/daily_pipeline.py --dry_run --date 2024-07-04
+python daily_pipeline.py --dry_run --date 2024-07-04
 ```
 
 ### Adding New Features
