@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 import time
 import warnings
 from datetime import date, datetime, timedelta
@@ -56,6 +57,7 @@ from src.predict_game import run_inference, _confidence, _apply_scaler
 from src.train import (
     load_checkpoint, PlattWrapper, IsotonicWrapper
 )
+import betting_simulator
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 ROOT        = Path(__file__).parent
@@ -597,6 +599,27 @@ def main(args: argparse.Namespace) -> None:
     # Print the text report to stdout too
     print(txt_path.read_text())
 
+    # Run betting simulator for yesterday's games in parallel (if enabled)
+    if args.run_simulator and not args.dry_run:
+        yesterday = today - timedelta(days=1)
+        _log(f"Starting betting simulator for {yesterday} in background...")
+        
+        def run_simulator():
+            try:
+                betting_simulator.run_simulation(
+                    start_date=yesterday,
+                    end_date=yesterday,
+                    initial_bankroll=args.bankroll,
+                    unit_size=args.unit
+                )
+            except Exception as e:
+                _log(f"Betting simulator error: {e}")
+        
+        # Start simulator in a daemon thread so it doesn't block
+        sim_thread = threading.Thread(target=run_simulator, daemon=True)
+        sim_thread.start()
+        _log("Betting simulator running in parallel (check reports/simulation/ for results)")
+
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
@@ -609,4 +632,10 @@ if __name__ == "__main__":
                    help="Skip data pull, use cached CSVs")
     p.add_argument("--date",       default=None,
                    help="Override today's date (YYYY-MM-DD) — useful for testing")
+    p.add_argument("--run_simulator", action="store_true",
+                   help="Run betting simulator for yesterday's games in parallel")
+    p.add_argument("--bankroll",   type=float, default=1000.0,
+                   help="Starting bankroll for simulator (default: $1000)")
+    p.add_argument("--unit",       type=float, default=100.0,
+                   help="Flat bet size for simulator (default: $100)")
     main(p.parse_args())

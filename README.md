@@ -139,9 +139,19 @@ python daily_pipeline.py
 python odds_comparison.py
 ```
 
+**Optional: Run betting simulator for yesterday's games in parallel:**
+```bash
+# Run pipeline with betting simulator for yesterday's results
+python daily_pipeline.py --run_simulator
+
+# Customize simulator bankroll and bet size
+python daily_pipeline.py --run_simulator --bankroll 5000 --unit 250
+```
+
 **What happens**:
 1. `daily_pipeline.py` pulls yesterday's completed games, updates rolling stats, generates predictions
 2. `odds_comparison.py` fetches live moneylines, finds edges, recommends value bets
+3. With `--run_simulator`: Simulates yesterday's value bets and reports results (runs in parallel)
 
 **Output files**:
 - `reports/predictions/predictions_YYYY-MM-DD.txt/.csv` — Model win probabilities
@@ -175,6 +185,26 @@ crontab -e
 
 # Add this line to run at 9:00 AM daily
 0 9 * * * cd /path/to/DeepBaseball && python daily_pipeline.py && python odds_comparison.py
+```
+
+**Important:** Cron runs with a minimal PATH and may not find your Python. If jobs fail silently:
+
+```bash
+# Use full paths (find yours with 'which python')
+0 9 * * * cd /path/to/DeepBaseball && /usr/local/bin/python daily_pipeline.py >> ~/mlb_pipeline.log 2>&1 && /usr/local/bin/python odds_comparison.py >> ~/mlb_pipeline.log 2>&1
+
+# Or set PATH at the top of your crontab
+PATH=/usr/local/bin:/usr/bin:/bin
+0 9 * * * cd /path/to/DeepBaseball && python daily_pipeline.py >> ~/mlb_pipeline.log 2>&1
+```
+
+**Debug cron issues:**
+```bash
+# Check system mail for cron output
+cat /var/mail/$(whoami)
+
+# View your log file
+tail -f ~/mlb_pipeline.log
 ```
 
 Windows: Use Task Scheduler to run the commands at your preferred time.
@@ -393,8 +423,8 @@ Edit `src/features.py`:
 ### Customizing Reports
 
 Edit column formatting in:
-- `src/odds_comparison.py` — `save_comparison()` function
-- `src/daily_pipeline.py` — `save_reports()` function
+- `odds_comparison.py` — `save_comparison()` function
+- `daily_pipeline.py` — `save_reports()` function
 
 ---
 
