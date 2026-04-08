@@ -184,18 +184,18 @@ Schedule daily runs with crontab (macOS/Linux):
 crontab -e
 
 # Add this line to run at 9:00 AM daily
-0 9 * * * cd /path/to/DeepBaseball && python daily_pipeline.py && python odds_comparison.py
+0 9 * * * cd /path/to/DeepBaseball && python daily_pipeline.py && python odds_comparison.py && python betting_simulator.py --date yesterday
 ```
 
 **Important:** Cron runs with a minimal PATH and may not find your Python. If jobs fail silently:
 
 ```bash
 # Use full paths (find yours with 'which python')
-0 9 * * * cd /path/to/DeepBaseball && /usr/local/bin/python daily_pipeline.py >> ~/mlb_pipeline.log 2>&1 && /usr/local/bin/python odds_comparison.py >> ~/mlb_pipeline.log 2>&1
+0 9 * * * cd /path/to/DeepBaseball && /usr/local/bin/python daily_pipeline.py >> ~/mlb_pipeline.log 2>&1 && /usr/local/bin/python odds_comparison.py >> ~/mlb_pipeline.log 2>&1 && /usr/local/bin/python betting_simulator.py --date yesterday >> ~/mlb_pipeline.log 2>&1
 
 # Or set PATH at the top of your crontab
 PATH=/usr/local/bin:/usr/bin:/bin
-0 9 * * * cd /path/to/DeepBaseball && python daily_pipeline.py >> ~/mlb_pipeline.log 2>&1
+0 9 * * * cd /path/to/DeepBaseball && python daily_pipeline.py >> ~/mlb_pipeline.log 2>&1 && python odds_comparison.py >> ~/mlb_pipeline.log 2>&1 && python betting_simulator.py --date yesterday >> ~/mlb_pipeline.log 2>&1
 ```
 
 **Debug cron issues:**

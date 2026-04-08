@@ -1,0 +1,24 @@
+name: DeepBaseball Daily Run
+on:
+  schedule:
+    - cron: '0 13 * * *' # 9:00 AM EST (converted to UTC)
+  workflow_dispatch: # Allows you to run it manually
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run Pipeline
+        run: |
+          python daily_pipeline.py
+          python odds_comparison.py
+          python betting_simulator.py --date yesterday
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }} # Store sensitive keys in GitHub Secrets
